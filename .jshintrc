@@ -1,0 +1,6 @@
+{
+    "globals": {
+        "THREE": true
+      },
+    "esversion": 6
+}
