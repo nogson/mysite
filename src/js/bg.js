@@ -2,6 +2,7 @@
 const Stats = require('stats.js');
 const glslify = require('glslify');
 const createBackground = require('three-vignette-background');
+import Typo from './typo.js';
 
 //GLSLの定義
 const computeShaderPosition = glslify('../js/shaders/computeShaderPosition.frag');
@@ -35,12 +36,12 @@ let gpuCompute,
 // その他
 let self, time, mouse;
 
+//タイポ関連
+let typo1;
+
 export default class Bg {
   constructor() {
     init();
-    //initComputeRenderer();
-   // initPosition();
-    animate();
     create();
   }
 }
@@ -67,7 +68,7 @@ let init = () => {
     noiseAlpha: 0.0,
     colors: ['#FFFFFF', '#999999']
   });
-  scene.add(background);
+  // scene.add(background);
 
   //その他の初期値
   time = 0;
@@ -81,33 +82,29 @@ let resize = () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 };
 
-let loadJson = (jsonPath) => {
-  return new Promise(resolve => {
-    jsonLoader.load(jsonPath, function (geometry) {
-      resolve(geometry);
-    });
-  });
-};
+
 
 let create = () => {
-  let promis = [];
 
-  promis.push(loadJson(json1));
+  let typo = new Typo(json1);
+  typo.create().then(function (geometry) {
+    particles = geometry.vertices.length;
+    tWidth = Math.floor(Math.sqrt(particles));
+    typo1 = geometry.vertices;
 
-
-
-  Promise.all(promis).then(function (response) {
-    console.log(response)
-    particles = response[0].vertices.length;
-    tWidth = Math.round(Math.sqrt(particles));
     initComputeRenderer();
     initPosition();
+    // var material = new THREE.MeshBasicMaterial({ color: 0xffff00,wireframe:true });
+    // var circle = new THREE.Mesh(geometry, material);
+    // scene.add(circle);
+
+    animate();
   });
 
 };
 
 let initComputeRenderer = () => {
-  
+
   gpuCompute = new GPUComputationRenderer(tWidth, tWidth, renderer);
 
   let dtPosition = gpuCompute.createTexture();
@@ -142,6 +139,7 @@ let initPosition = () => {
 
   geometry = new THREE.BufferGeometry();
   let positions = new Float32Array(particles * 3);
+
   let p = 0;
   for (let i = 0; i < particles; i++) {
     positions[p++] = 0;
@@ -183,12 +181,12 @@ let initPosition = () => {
   });
 
   material.extensions.drawBuffers = true;
-  let particles = new THREE.Points(geometry, material);
-  particles.matrixAutoUpdate = false;
-  particles.updateMatrix();
+  let points = new THREE.Points(geometry, material);
+  points.matrixAutoUpdate = false;
+  points.updateMatrix();
 
   // パーティクルをシーンに追加
-  scene.add(particles);
+  scene.add(points);
 }
 
 let fillTextures = (texturePosition) => {
@@ -197,13 +195,14 @@ let fillTextures = (texturePosition) => {
 
   for (let y = 0; y < tWidth; y++) {
     for (let x = 0; x < tWidth; x++) {
-      let n = x + y * tWidth;
+      let l = x + y * tWidth;
+      let n = l;
       n = n * 4;
 
       //パーティクルの初期値
-      posArray[n + 0] = 0; //X
-      posArray[n + 1] = 0; //Y
-      posArray[n + 2] = 0; //Z
+      posArray[n + 0] = typo1[l].x; //X
+      posArray[n + 1] = typo1[l].y; //Y
+      posArray[n + 2] = typo1[l].z; //Z
       posArray[n + 3] = 0; //W
     }
   }
@@ -225,15 +224,15 @@ let animate = () => {
 
 let render = () => {
 
-  //gpuCompute.compute();
+  gpuCompute.compute();
 
   //uniform変数を更新
   time = CLOCK.getElapsedTime();
 
-  //positionVariable.material.uniforms.time.value = time;
+  positionVariable.material.uniforms.time.value = time;
 
   // 計算した結果が格納されたテクスチャをレンダリング用のシェーダーに渡す
-  //particleUniforms.texturePosition.value = gpuCompute.getCurrentRenderTarget(positionVariable).texture;
+  particleUniforms.texturePosition.value = gpuCompute.getCurrentRenderTarget(positionVariable).texture;
 
   renderer.render(scene, camera);
 };
